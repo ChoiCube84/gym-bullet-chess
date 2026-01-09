@@ -44,6 +44,31 @@ while not done:
 env.close()
 ```
 
+### Self-Play Mode
+
+You can enable self-play mode to control both White and Black pieces. This disables the automatic random opponent.
+
+```python
+import gymnasium as gym
+import bullet_chess_env
+
+# Enable self-play at initialization
+env = gym.make("BulletChess-v0", self_play=True)
+
+# OR enable via reset options
+# env = gym.make("BulletChess-v0")
+# env.reset(options={"self_play": True})
+
+obs, info = env.reset()
+
+# Play a move for White
+obs, reward, terminated, truncated, info = env.step(white_action)
+
+if not terminated:
+    # Play a move for Black
+    obs, reward, terminated, truncated, info = env.step(black_action)
+```
+
 ### Real-Time Constraints
 
 To properly simulate bullet chess, you should use the `RealTimeClock` wrapper. This wrapper measures the time your agent takes to compute an action and deducts it from the in-game clock.
@@ -109,9 +134,11 @@ Each integer action represents a move from one square to another:
 | **Illegal Move** | `-10.0` | Attempting a pseudo-legal or invalid move. Episode terminates immediately. |
 
 ### Opponent
-The environment currently includes a built-in "Random Opponent".
+The environment includes a built-in "Random Opponent" (default).
 - **Moves**: Chooses a random legal move.
 - **Time**: Consumes a random amount of time (0.1s to 0.5s) per move to simulate a human processing delay.
+
+To disable the opponent and control both sides manually, see **Self-Play Mode** above.
 
 ---
 

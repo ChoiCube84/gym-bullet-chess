@@ -3,7 +3,7 @@ chess==1.11.2
 click==8.3.1
 cloudpickle==3.1.2
 Farama-Notifications==0.0.4
--e git+ssh://git@github.com/ChoiCube84/gym-bullet-chess.git@ba39534cd19e2a2551e324b1b9c90e675d45404d#egg=gym_bullet_chess
+-e .
 gymnasium==1.2.3
 iniconfig==2.3.0
 mypy_extensions==1.1.0

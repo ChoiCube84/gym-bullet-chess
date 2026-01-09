@@ -125,17 +125,18 @@ class TestRealTime(unittest.TestCase):
         """Edge Case: Invalid tuple formats."""
         self.base_env.reset()
 
-        # Case 1: Tuple too short -> IndexError expected based on code inspection
-        # But we want to see what happens. Ideally it should be handled or raise a clear error.
-        # The current code: move_idx = action[0], elapsed = float(action[1])
-        with self.assertRaises(IndexError):
-            self.base_env.step((123,))
+        # Case 1: Tuple too short -> Should be handled gracefully now (default time=0.0)
+        action_idx = 12 * 64 + 28
+        # Pass a 1-element tuple. Should NOT raise IndexError anymore.
+        obs, reward, terminated, truncated, info = self.base_env.step((action_idx,))
+        
+        # Verify it treated it as 0.0 elapsed time
+        self.assertAlmostEqual(obs["state"][6] * 60.0, 60.0, places=4)
 
         # Case 2: Tuple too long -> Should work, taking first two elements
         self.base_env.reset()
-        action = 12 * 64 + 28
         obs, reward, terminated, truncated, info = self.base_env.step(
-            (action, 5.0, "extra_junk")
+            (action_idx, 5.0, "extra_junk")
         )
         self.assertFalse(terminated)
         self.assertAlmostEqual(obs["state"][6] * 60.0, 55.0)

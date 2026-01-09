@@ -1,7 +1,7 @@
 import gymnasium as gym
 import numpy as np
 import chess
-import random
+# import random  <-- REMOVED unused import
 from gymnasium import spaces
 from gym_bullet_chess.utils.encoding import (
     get_board_tensor,
@@ -26,15 +26,18 @@ class BulletChessEnv(gym.Env):
     
     metadata = {"render_modes": ["ansi"]}
 
-    def __init__(self, render_mode=None):
+    def __init__(self, render_mode=None, self_play=False):
         """
         Initialize the Bullet Chess environment.
 
         Args:
             render_mode (str, optional): The render mode to use. Defaults to None.
                                          Supported modes: "ansi" (returns text representation).
+            self_play (bool, optional): If True, the environment expects the agent to make moves
+                                        for both White and Black. Automatic opponent is disabled.
         """
         self.render_mode = render_mode
+        self.self_play = self_play
         self.board = chess.Board()
 
         # Action: 4096 (from_sq * 64 + to_sq)
@@ -72,6 +75,11 @@ class BulletChessEnv(gym.Env):
         self.board.reset()
         self.white_time = self.initial_time
         self.black_time = self.initial_time
+        
+        # Allow overriding self_play via options
+        if options and "self_play" in options:
+            self.self_play = options["self_play"]
+            
         return self._get_obs(), {}
 
     def step(self, action):
@@ -97,18 +105,36 @@ class BulletChessEnv(gym.Env):
         elapsed_time = 0.0
         move_idx = action
 
+        # FIXED: Robust tuple unpacking
         if isinstance(action, (tuple, list)):
-            move_idx = action[0]
-            elapsed_time = float(action[1])
+            if len(action) >= 1:
+                move_idx = action[0]
+            if len(action) >= 2:
+                elapsed_time = float(action[1])
 
-        # 1. Decrement Agent Clock (Based on input)
-        self.white_time -= elapsed_time
+        # FIXED: Validate elapsed_time
+        if not np.isfinite(elapsed_time) or elapsed_time < 0:
+            elapsed_time = 0.0
 
-        # 2. Check Agent Termination (Timeout)
-        if self.white_time <= 0:
+        # 1. Decrement Clock (Based on current turn)
+        is_white_turn = self.board.turn == chess.WHITE
+        
+        if is_white_turn:
+            self.white_time -= elapsed_time
+        else:
+            self.black_time -= elapsed_time
+
+        # 2. Check Termination (Timeout)
+        # Timeout is a loss for the player whose turn it is
+        if is_white_turn and self.white_time <= 0:
             return self._get_obs(), -1.0, True, False, {"reason": "timeout"}
+        elif not is_white_turn and self.black_time <= 0:
+            # If self_play is True, the agent (Black) loses -> -1.0
+            # If self_play is False, the opponent (Black) loses, so Agent (White) wins -> +1.0
+            reward = -1.0 if self.self_play else 1.0
+            return self._get_obs(), reward, True, False, {"reason": "timeout"}
 
-        # 3. Decode and Validate Agent Move
+        # 3. Decode and Validate Move
         move = int_to_move(move_idx, self.board)
 
         if move not in self.board.legal_moves:
@@ -116,32 +142,38 @@ class BulletChessEnv(gym.Env):
             # Agent loses immediately for playing an illegal move to enforce valid play.
             return self._get_obs(), -10.0, True, False, {"error": "illegal_move"}
 
-        # 4. Apply Agent Move
+        # 4. Apply Move
         self.board.push(move)
 
         if self.board.is_game_over():
             return self._handle_game_over()
 
+        # If Self Play is enabled, we stop here and return control to the agent
+        if self.self_play:
+            return self._get_obs(), 0.0, False, False, {}
+
         # 5. Opponent Move (Black - Random)
-        legal_moves = list(self.board.legal_moves)
-        if not legal_moves:
-            # Should be handled by is_game_over, but safety check for stalemate/mate conditions
-            return self._handle_game_over()
+        # Only execute if it was White's turn (so now it's Black's turn)
+        # and self_play is False.
+        if is_white_turn:
+            legal_moves = list(self.board.legal_moves)
+            if not legal_moves:
+                return self._handle_game_over()
 
-        # Use Gymnasium's random generator for reproducibility
-        opp_move = self.np_random.choice(legal_moves)
-        self.board.push(opp_move)
+            # Use Gymnasium's random generator for reproducibility
+            opp_move = self.np_random.choice(legal_moves)
+            self.board.push(opp_move)
 
-        # Decrement Opponent Clock (Simulated)
-        # We simulate a random thinking time for the opponent between 0.1s and 0.5s
-        opp_cost = self.np_random.uniform(0.1, 0.5)
-        self.black_time -= opp_cost
+            # Decrement Opponent Clock (Simulated)
+            # We simulate a random thinking time for the opponent between 0.1s and 0.5s
+            opp_cost = self.np_random.uniform(0.1, 0.5)
+            self.black_time -= opp_cost
 
-        if self.black_time <= 0:
-            return self._get_obs(), 1.0, True, False, {"reason": "opponent_timeout"}
+            if self.black_time <= 0:
+                return self._get_obs(), 1.0, True, False, {"reason": "opponent_timeout"}
 
-        if self.board.is_game_over():
-            return self._handle_game_over()
+            if self.board.is_game_over():
+                return self._handle_game_over()
 
         # 6. Continue
         return self._get_obs(), 0.0, False, False, {}
@@ -163,11 +195,28 @@ class BulletChessEnv(gym.Env):
         """
         result = self.board.result()  # "1-0", "0-1", "1/2-1/2"
         reward = 0.0
+        
+        # Absolute rewards (White perspective)
         if result == "1-0":
             reward = 1.0
         elif result == "0-1":
             reward = -1.0
-        # Draw is 0.0
+            
+        # In self-play, we want the reward to be from the perspective of the 
+        # player who just made the move (the "agent").
+        # Note: self.board.push() has already happened, so self.board.turn 
+        # is the NEXT player. The player who just moved is the OPPOSITE.
+        
+        if self.self_play:
+            # If it is now White's turn, then Black just moved.
+            if self.board.turn == chess.WHITE:
+                # Black made the move. If result is 0-1 (reward -1.0), Black won.
+                # So we flip the sign to make it +1.0 for Black.
+                reward = -reward
+            
+            # If it is now Black's turn, then White just moved.
+            # White made the move. If result is 1-0 (reward 1.0), White won.
+            # Reward stays 1.0.
 
         return self._get_obs(), reward, True, False, {"result": result}
 
