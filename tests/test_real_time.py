@@ -129,7 +129,7 @@ class TestRealTime(unittest.TestCase):
         action_idx = 12 * 64 + 28
         # Pass a 1-element tuple. Should NOT raise IndexError anymore.
         obs, reward, terminated, truncated, info = self.base_env.step((action_idx,))
-        
+
         # Verify it treated it as 0.0 elapsed time
         self.assertAlmostEqual(obs["state"][6] * 60.0, 60.0, places=4)
 

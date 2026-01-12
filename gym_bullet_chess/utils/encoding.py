@@ -5,9 +5,9 @@ import chess
 def get_board_tensor(board: chess.Board) -> np.ndarray:
     """
     Converts a chess.Board to an (8, 8, 12) float32 tensor suitable for CNNs.
-    
+
     The board is viewed from White's perspective (rank 0 is White's 1st rank).
-    
+
     Layers (Channel last):
         0: White Pawns
         1: White Knights
@@ -21,10 +21,10 @@ def get_board_tensor(board: chess.Board) -> np.ndarray:
         9: Black Rooks
         10: Black Queens
         11: Black King
-        
+
     Args:
         board (chess.Board): The python-chess board object.
-        
+
     Returns:
         np.ndarray: Shape (8, 8, 12) with values 0.0 or 1.0.
     """
@@ -52,7 +52,7 @@ def get_state_vector(
 ) -> np.ndarray:
     """
     Returns an 8-dim vector representing global game state and clocks.
-    
+
     Indices:
         0: Turn (1.0 = White, 0.0 = Black)
         1: White King-side Castle (1.0 = Yes)
@@ -60,15 +60,15 @@ def get_state_vector(
         3: Black King-side Castle (1.0 = Yes)
         4: Black Queen-side Castle (1.0 = Yes)
         5: En Passant Available (1.0 = Yes)
-        6: White Time (Normalized 0-1)
-        7: Black Time (Normalized 0-1)
-        
+        6: White Time (Normalized 0-1, can exceed 1 with increment)
+        7: Black Time (Normalized 0-1, can exceed 1 with increment)
+
     Args:
         board (chess.Board): The current board.
         white_time (float): Remaining seconds for White.
         black_time (float): Remaining seconds for Black.
         max_time (float): The initial time control (e.g., 60.0).
-        
+
     Returns:
         np.ndarray: Shape (8,) float32 vector.
     """
@@ -87,6 +87,9 @@ def get_state_vector(
     state[5] = 1.0 if board.ep_square is not None else 0.0
 
     # 6-7. Normalized Time
+    # Note: With increment, time can technically exceed max_time.
+    # We allow the value to go above 1.0 rather than clamping,
+    # as having "bonus time" is a valid state.
     state[6] = max(0.0, white_time / max_time)
     state[7] = max(0.0, black_time / max_time)
 
@@ -96,10 +99,10 @@ def get_state_vector(
 def decode_action_to_squares(action_idx: int) -> tuple[int, int]:
     """
     Decodes a discrete action index (0..4095) into (from_square, to_square).
-    
+
     Args:
         action_idx (int): The integer action.
-        
+
     Returns:
         tuple[int, int]: (from_square, to_square) indices (0-63).
     """
@@ -111,14 +114,14 @@ def decode_action_to_squares(action_idx: int) -> tuple[int, int]:
 def int_to_move(action_idx: int, board: chess.Board) -> chess.Move:
     """
     Converts an action index to a chess.Move object.
-    
+
     Handles automatic promotion to Queen. If a pawn moves to the last rank,
     it is assumed to promote to a Queen. This simplifies the action space.
-    
+
     Args:
         action_idx (int): The integer action.
         board (chess.Board): The board context (needed to check for pawn moves).
-        
+
     Returns:
         chess.Move: The corresponding python-chess Move object.
     """

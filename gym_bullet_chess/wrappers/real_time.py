@@ -9,7 +9,7 @@ class RealTimeClock(gym.Wrapper):
 
     This enforces "Real-Time" constraints on the agent. If the agent takes 10 seconds
     to compute an action, 10 seconds will be subtracted from its game clock in the environment.
-    
+
     Without this wrapper, the environment assumes 0.0s elapsed time for the agent's move
     unless manually provided in the step() tuple.
     """
@@ -17,7 +17,7 @@ class RealTimeClock(gym.Wrapper):
     def __init__(self, env):
         """
         Initialize the RealTimeClock wrapper.
-        
+
         Args:
             env (gym.Env): The environment to wrap (usually BulletChessEnv).
         """
@@ -36,8 +36,8 @@ class RealTimeClock(gym.Wrapper):
     def step(self, action):
         """
         Execute a step, measuring the time elapsed since the last step/reset.
-        
-        The elapsed time is bundled with the action into a tuple and passed 
+
+        The elapsed time is bundled with the action into a tuple and passed
         to the underlying environment.
         """
         if self.last_time is None:
