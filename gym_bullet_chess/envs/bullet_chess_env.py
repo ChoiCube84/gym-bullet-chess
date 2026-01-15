@@ -111,7 +111,7 @@ class BulletChessEnv(gym.Env):
         while isinstance(move_idx, (tuple, list)):
             if len(move_idx) >= 2:
                 # Assuming (action, time) pattern
-                elapsed_time = float(move_idx[1])
+                elapsed_time += float(move_idx[1])
                 move_idx = move_idx[0]
             elif len(move_idx) == 1:
                 move_idx = move_idx[0]
@@ -150,6 +150,15 @@ class BulletChessEnv(gym.Env):
                 True,
                 False,
                 {"error": "invalid_action_format"},
+            )
+
+        if not (0 <= move_idx < self.action_space.n):
+            return (
+                self._get_obs(),
+                -10.0,
+                True,
+                False,
+                {"error": "action_out_of_bounds"},
             )
 
         move = int_to_move(move_idx, self.board)
