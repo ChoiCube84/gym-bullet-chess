@@ -128,16 +128,17 @@ class BulletChessEnv(gym.Env):
         if is_white_turn:
             self.white_time -= elapsed_time
             if self.white_time <= 0:
-                # White timed out. White loses.
-                return self._get_obs(), -1.0, True, False, {"reason": "timeout"}
+                # Timeout Handling: Soft reset for API model testing
+                # Instead of ending the game, we reset the clock and continue.
+                # This allows us to benchmark move quality even if the API is slow.
+                self.white_time = self.time_limit  # Reset clock
+                return self._get_obs(), 0.0, False, False, {"warning": "timeout_reset_white"}
         else:
             self.black_time -= elapsed_time
             if self.black_time <= 0:
-                # Black timed out. Black loses.
-                # In self play, the agent (Black) gets -1.0.
-                # In vs-cpu, the agent (White) gets +1.0.
-                reward = -1.0 if self.self_play else 1.0
-                return self._get_obs(), reward, True, False, {"reason": "timeout"}
+                # Timeout Handling: Soft reset for API model testing
+                self.black_time = self.time_limit  # Reset clock
+                return self._get_obs(), 0.0, False, False, {"warning": "timeout_reset_black"}
 
         # 3. Decode and Validate Move
         # Ensure integer
